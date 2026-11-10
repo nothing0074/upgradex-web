@@ -43,8 +43,8 @@
       desc: 'Start generating 1/s Credits every second.',
     },
     {
-      // Cost from the wiki formula: 3L^2 - 3L + 10 - 2, where L = current level.
-      id: '2', title: 'Addition', cap: () => 3 + 3 * lv('6'), cost: (l) => 3 * l * l - 3 * l + 10 - 2,
+      // Cost from the wiki formula: (3L^2 - 3L + 10) / 2, where L = current level.
+      id: '2', title: 'Addition', cap: () => 3 + 3 * lv('6'), cost: (l) => (3 * l * l - 3 * l + 10) / 2,
       desc: () => `+${1 + lv('7')}/s Credits per level. Additions are applied to the base amount.`,
     },
     {

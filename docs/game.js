@@ -1,6 +1,6 @@
 // Upgradex web version.
-// Mechanics are based on the Upgradex wiki (Main baseplate, layer 1).
-// Where the wiki does not give a cost formula, an assumption is noted below.
+// Mechanics are based on the Upgradex wiki (Main, Research, Cube).
+// Where the wiki does not give a value, an assumption is noted below.
 
 (() => {
   const SAVE_KEY = 'upgradex-web-v1';
@@ -10,6 +10,7 @@
   const state = {
     credits: 0,
     data: 0,
+    energy: 0,        // Core currency (from Research reset, needs #CR)
     lv: {},           // upgrade id -> level bought
     growthTime: 0,    // seconds since "Grows overtime" (#10) was bought
     researchTime: 0,  // seconds since the last Research reset
@@ -19,8 +20,8 @@
 
   const lv = (id) => state.lv[id] || 0;
 
-  // Tags per upgrade, copied from the Main baseplate table on the wiki.
-  // First tag = colour group, second = currency group (Credits-*).
+  // Tags per upgrade, copied from the wiki tables.
+  // First tag = colour group, second = currency or system group.
   const TAGS = {
     '1': ['Blue', 'Credits-Blue'],
     '2': ['Green', 'Credits-Green'],
@@ -29,6 +30,7 @@
     '5': ['Orange', 'Credits-Orange'],
     '6': ['Red', 'Credits-Red'],
     '7': ['Red', 'Credits-Red'],
+    '8': ['Green', 'Credits-Green'],
     '9': ['Red', 'Credits-Red'],
     '10': ['Green', 'Credits-Green'],
     '11': ['Orange', 'Credits-Orange'],
@@ -56,12 +58,13 @@
     'BTR': ['Blue', 'Research-Blue'],
   };
 
-  // Synergism (#5) counts every bought upgrade that has a Credits-* tag (from TAGS).
+  // Synergism (#5) counts every bought upgrade that has a Credits-* tag.
   const CREDITS_IDS = Object.keys(TAGS).filter((id) => TAGS[id].some((t) => t.startsWith('Credits-')));
   const countSynergy = () => CREDITS_IDS.filter((id) => lv(id) > 0).length;
 
   // ---------- Upgrade definitions (Main, layer 1) ----------
   // cap(): max level. cost(level): credits needed to buy the next level.
+  // gate(): optional, card is hidden until it returns true.
   const UPGRADES = [
     {
       id: '1', title: 'New shore', cap: () => 1, cost: () => 0,
@@ -70,22 +73,22 @@
     {
       // Cost from the wiki formula: (3L^2 - 3L + 10) / 2, where L = current level.
       id: '2', title: 'Addition', cap: () => 3 + 3 * lv('6'), cost: (l) => (3 * l * l - 3 * l + 10) / 2,
-      desc: () => `+${1 + lv('7')}/s Credits per level. Additions are applied to the base amount.`,
+      desc: () => `+${1 + lv('7')}/s Credits per level.`,
     },
     {
       // Wiki cap "3 (+47)" = 50 total; #9 adds +27.
-      // Cost past level 3: 2.083L^2 + 83.94L - 53.43 (L = current level). Levels 0-3 are still assumed: 25*(L+1).
+      // Cost past level 3: 2.083L^2 + 83.94L - 53.43. Levels 0-2 are assumed: 25*(L+1).
       id: '3', title: 'Stronger addition', cap: () => 50 + 27 * lv('9'),
       cost: (l) => (l >= 3 ? Math.ceil(2.083 * l * l + 83.94 * l - 53.43) : 25 * (l + 1)),
-      desc: '+3/s Credits per level.',
+      desc: () => `+${3 + 5 * lv('4R')}/s Credits per level.`,
     },
     {
       id: '4', title: 'Multiplication', cap: () => 1, cost: () => 50,
-      desc: '×2 Credits gain. Multipliers are applied after additions.',
+      desc: '×2 Credits gain.',
     },
     {
       id: '5', title: 'Synergism', cap: () => 1, cost: () => 250,
-      desc: '×1.1 Credits gain for every upgrade with a Credits tag.',
+      desc: () => `×${(1.1 + 0.1 * lv('7R')).toFixed(2)} Credits gain for every upgrade with a Credits tag.`,
     },
     {
       id: '6', title: 'Extender', cap: () => 4, cost: (l) => 125 * 2 ** l,
@@ -93,7 +96,14 @@
     },
     {
       id: '7', title: 'Full potential', cap: () => 1, cost: () => 500,
-      desc: 'Increases upgrade #2\'s boost per level by +1/s.',
+      desc: "Increases upgrade #2's boost per level by +1/s.",
+    },
+    {
+      // Unlocked by Research #2R. Cost formula from the wiki: 3000 * 5^(L^0.9).
+      // Reward per level (+2 Data per Research reset) is an assumption.
+      id: '8', title: 'For science', cap: () => 5, cost: (l) => 3000 * 5 ** (l ** 0.9),
+      gate: () => lv('2R') > 0,
+      desc: '+2 Data on Research reset per level.',
     },
     {
       id: '9', title: 'Super-spending', cap: () => 1, cost: () => 15000,
@@ -122,13 +132,13 @@
   ];
 
   // ---------- Research baseplate (layer 1) ----------
-  // Costs are in Data. Items with no wiki cost use () => Infinity (cannot be bought).
+  // Costs are in Data. cost() returning Infinity means the wiki gives no cost (cannot be bought).
   // impl: false marks effects that depend on systems not built yet.
   const RESEARCH = [
     { id: '1R', title: 'Headstart', cap: () => 5, cost: (l) => 1 + l,
-      desc: '+15/s Credits per level.' },
-    { id: '2R', title: 'Expansion', cap: () => 1, cost: () => 2, impl: false,
-      desc: 'Adds more Blue upgrades (#8 → #11).' },
+      desc: () => `+${15 * lv('1R')}/s Credits (+15 per level).` },
+    { id: '2R', title: 'Expansion', cap: () => 1, cost: () => 2,
+      desc: 'Unlocks Main #8 (For science).' },
     { id: '3R', title: 'Innovate', cap: () => 50, cost: (l) => (l < 50 ? 2 * 1.25 ** l : 250000 * 1.5 ** (l - 50)),
       desc: '+0.5× Credits gain per level. The first level starts at ×2.' },
     { id: '4R', title: 'Adding addition', cap: () => 1, cost: () => 15,
@@ -159,7 +169,7 @@
       desc: 'Unlocks Shortcuts.' },
     { id: '3RB', title: 'Tinkering', cap: () => 1, cost: () => 25, impl: false,
       desc: 'Unlocks the Computer.' },
-    { id: 'CR', title: 'Electric hum', cap: () => 1, cost: () => 25, impl: false,
+    { id: 'CR', title: 'Electric hum', cap: () => 1, cost: () => 25,
       desc: 'Unlocks the Core and Energy.' },
     { id: 'BTR', title: 'Shattered', cap: () => 1, cost: () => Infinity, impl: false,
       desc: 'Unlocks Breakthrough. Cost is missing on the wiki.' },
@@ -169,32 +179,64 @@
   function creditsPerSecond() {
     let base = lv('1') * 1;
     base += lv('2') * (1 + lv('7'));
-    base += lv('3') * 3;
+    base += lv('3') * (3 + 5 * lv('4R'));   // #4R: upgrade #3 gets +5/s per level
     if (lv('10')) base += 50 + state.growthTime;
-    if (lv('RSC') && lv('1R')) base += 15 * lv('1R');
+    base += lv('1R') * 15;                  // #1R Headstart
 
     let mult = 1;
     if (lv('4')) mult *= 2;
-    if (lv('5')) mult *= 1.1 ** countSynergy();
+    if (lv('5')) mult *= (1.1 + 0.1 * lv('7R')) ** countSynergy(); // #7R: +0.1 per upgrade
     mult *= 1.2 ** lv('11');
-    if (lv('3R')) mult *= 1 + 0.5 * lv('3R');
+    if (lv('3R')) mult *= 1 + 0.5 * (lv('3R') + 1); // #3R: first level ×2, +0.5 per level
+    if (lv('6R') && state.credits < 1e6) mult *= 4; // #6R Welfare
+    if (lv('8R') && state.researchTime > 30) mult *= 2; // #8R Devotion
+    mult *= cubeCreditsBoost();
 
     let gain = base * mult;
     if (lv('12') && gain > 1) gain = gain ** 1.1;
     return gain;
   }
 
+  // ---------- Cube ----------
   // Cube click gain per click: +1 per BFFs level, plus Cubing it (#5R).
   function cubeClickGain() {
     return 1 + lv('CB') + lv('5R');
   }
 
+  // Cube boosts from the wiki. Credits boost starts at 10 clicks, Data boost at 100.
+  // The Prestige boost (needs #6P) is not implemented.
+  function cubeCreditsBoost() {
+    if (state.clicks < 10) return 1;
+    return 0.25 + (state.clicks / 10) ** 0.175;
+  }
+
+  function cubeDataBoost() {
+    if (state.clicks < 100) return 1;
+    return 0.125 + (state.clicks / 100) ** 0.125;
+  }
+
+  // Starters milestone (25 clicks) gives a 5% crit chance. Crit multiplier ×5 is assumed.
+  const CRIT_MULT = 5;
+  function cubeCritChance() {
+    return state.clicks >= 25 ? 0.05 : 0;
+  }
+
+  // ---------- Research ----------
   // Data gained by a Research reset (wiki: (Credits/500)^0.25, needs at least 500 Credits).
   function pendingData() {
     if (state.credits < 500) return 0;
-    return (state.credits / 500) ** 0.25;
+    let d = (state.credits / 500) ** 0.25;
+    if (lv('8R') && state.researchTime > 30) d *= 2; // #8R Devotion
+    return d * cubeDataBoost();
   }
 
+  // Items kept on Research reset: Research items (R / RB), unlock flags, and the Cube.
+  // Main upgrades are reset (assumption, the wiki does not say which persist).
+  function keepOnResearch(id) {
+    return /R(B)?$/.test(id) || ['RSC', 'CB', 'CR', 'BTR'].includes(id);
+  }
+
+  // ---------- Buying ----------
   function buy(def) {
     const level = lv(def.id);
     if (level >= def.cap()) return;
@@ -204,7 +246,7 @@
     state.lv[def.id] = level + 1;
     if (def.id === '10' && level === 0) state.growthTime = 0;
     render();
-    save();
+    save(true);
   }
 
   function buyResearch(def) {
@@ -216,34 +258,35 @@
     state.data -= price;
     state.lv[def.id] = level + 1;
     render();
-    save();
+    save(true);
   }
 
-  // Research reset: convert Credits to Data, keep Data and Research upgrades.
-  // Clears Credits and Main upgrades (not Breakthrough/Cube-related items).
+  // Research reset: convert Credits to Data, keep Research upgrades and unlocks.
   function doResearch() {
     if (!lv('RSC')) return;
-    const gained = pendingData();
-    if (gained <= 0) {
+    const base = pendingData();
+    if (base <= 0) {
       flash('Need 500+ Credits to research');
       return;
     }
+    const gained = base + 2 * lv('8'); // #8: +2 Data per level
     if (!confirm(`Research reset: gain ${fmt(gained)} Data and clear Credits and Main upgrades?`)) return;
     state.data += gained;
+    if (lv('CR')) state.energy += gained; // Core: Energy matches Data gained (assumption)
     state.credits = 0;
-    state.lv = Object.fromEntries(
-      Object.entries(state.lv).filter(([id]) => id.endsWith('R') || id.endsWith('RB') || id === 'CR' || id === 'BTR' || id === 'RSC'),
-    );
+    state.lv = Object.fromEntries(Object.entries(state.lv).filter(([id]) => keepOnResearch(id)));
     state.growthTime = 0;
     state.researchTime = 0;
     state.researches += 1;
     render();
-    save();
+    save(true);
   }
 
   function clickCube() {
     if (!lv('CB')) return;
-    state.clicks += cubeClickGain();
+    let gain = cubeClickGain();
+    if (Math.random() < cubeCritChance()) gain *= CRIT_MULT;
+    state.clicks += gain;
     render();
   }
 
@@ -269,6 +312,9 @@
     clicks: document.getElementById('clicks'),
     clickGain: document.getElementById('click-gain'),
     cubeBtn: document.getElementById('cube-btn'),
+    cubeBoosts: document.getElementById('cube-boosts'),
+    corePanel: document.getElementById('core-panel'),
+    energy: document.getElementById('energy'),
     status: document.getElementById('status'),
     save: document.getElementById('save-btn'),
     reset: document.getElementById('reset-btn'),
@@ -277,67 +323,72 @@
   const cards = new Map();
   const researchCards = new Map();
 
-  function buildResearchCards() {
-    els.research.innerHTML = '';
-    for (const def of RESEARCH) {
-      const card = document.createElement('div');
-      card.className = 'card';
-      card.innerHTML = `
-        <div class="card-head">
-          <span class="card-title">${def.title}</span>
-          <span class="card-index">#${def.id}</span>
-        </div>
-        <div class="tags"></div>
-        <div class="card-desc"></div>
-        <div class="card-foot">
-          <span class="level"></span>
-          <span class="cost"></span>
-        </div>`;
-      const tagBox = card.querySelector('.tags');
-      for (const tag of TAGS[def.id] || []) {
-        const chip = document.createElement('span');
-        chip.className = `tag-chip tag-${tag.split('-')[0].toLowerCase()}`;
-        chip.textContent = tag;
-        tagBox.appendChild(chip);
-      }
-      if (def.impl === false) {
-        const note = document.createElement('span');
-        note.className = 'tag-chip tag-note';
-        note.textContent = 'not implemented';
-        tagBox.appendChild(note);
-      }
-      card.addEventListener('click', () => buyResearch(def));
-      els.research.appendChild(card);
-      researchCards.set(def.id, card);
+  function makeCard(def, onClick) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-head">
+        <span class="card-title">${def.title}</span>
+        <span class="card-index">#${def.id}</span>
+      </div>
+      <div class="tags"></div>
+      <div class="card-desc"></div>
+      <div class="card-foot">
+        <span class="level"></span>
+        <span class="cost"></span>
+      </div>`;
+    const tagBox = card.querySelector('.tags');
+    for (const tag of TAGS[def.id] || []) {
+      const chip = document.createElement('span');
+      chip.className = `tag-chip tag-${tag.split('-')[0].toLowerCase()}`;
+      chip.textContent = tag;
+      tagBox.appendChild(chip);
     }
+    if (def.impl === false) {
+      const note = document.createElement('span');
+      note.className = 'tag-chip tag-note';
+      note.textContent = 'not implemented';
+      tagBox.appendChild(note);
+    }
+    card.addEventListener('click', () => onClick(def));
+    return card;
   }
 
   function buildCards() {
     els.upgrades.innerHTML = '';
     for (const def of UPGRADES) {
-      const card = document.createElement('div');
-      card.className = 'card';
-      card.innerHTML = `
-        <div class="card-head">
-          <span class="card-title">${def.title}</span>
-          <span class="card-index">#${def.id}</span>
-        </div>
-        <div class="tags"></div>
-        <div class="card-desc"></div>
-        <div class="card-foot">
-          <span class="level"></span>
-          <span class="cost"></span>
-        </div>`;
-      const tagBox = card.querySelector('.tags');
-      for (const tag of TAGS[def.id] || []) {
-        const chip = document.createElement('span');
-        chip.className = `tag-chip tag-${tag.split('-')[0].toLowerCase()}`;
-        chip.textContent = tag;
-        tagBox.appendChild(chip);
-      }
-      card.addEventListener('click', () => buy(def));
+      const card = makeCard(def, buy);
       els.upgrades.appendChild(card);
       cards.set(def.id, card);
+    }
+  }
+
+  function buildResearchCards() {
+    els.research.innerHTML = '';
+    for (const def of RESEARCH) {
+      const card = makeCard(def, buyResearch);
+      els.research.appendChild(card);
+      researchCards.set(def.id, card);
+    }
+  }
+
+  function setCardText(card, def, level, cap, price, currency) {
+    card.querySelector('.card-desc').textContent =
+      typeof def.desc === 'function' ? def.desc() : def.desc;
+    card.querySelector('.level').textContent = `Lv ${level}/${cap}`;
+    const costEl = card.querySelector('.cost');
+    if (level >= cap) {
+      costEl.textContent = 'MAX';
+      costEl.className = 'cost free';
+    } else if (price === Infinity) {
+      costEl.textContent = '???';
+      costEl.className = 'cost';
+    } else if (price === 0) {
+      costEl.textContent = 'Free!';
+      costEl.className = 'cost free';
+    } else {
+      costEl.textContent = `${fmt(price)} ${currency}`;
+      costEl.className = 'cost';
     }
   }
 
@@ -345,63 +396,46 @@
     els.credits.textContent = fmt(state.credits);
     els.rate.textContent = `${fmt(creditsPerSecond())}/s`;
     els.data.textContent = fmt(state.data);
-    els.dataPanel.hidden = !lv('RSC');
-    els.researchPanel.hidden = !lv('RSC');
+
+    const researchOn = lv('RSC') > 0;
+    els.dataPanel.hidden = !researchOn;
+    els.researchPanel.hidden = !researchOn;
+    els.researchBtn.disabled = !researchOn;
+
     els.cubePanel.hidden = !lv('CB');
-    els.researchBtn.disabled = !lv('RSC');
     els.clicks.textContent = fmt(state.clicks);
     els.clickGain.textContent = `+${fmt(cubeClickGain())}/click`;
+    els.cubeBoosts.textContent =
+      `Credits ×${cubeCreditsBoost().toFixed(2)} · Data ×${cubeDataBoost().toFixed(2)} · ` +
+      `Crit ${(cubeCritChance() * 100).toFixed(0)}% (×${CRIT_MULT}) · Milestone: Starters (25 clicks)`;
+
+    els.corePanel.hidden = !lv('CR');
+    els.energy.textContent = fmt(state.energy);
 
     for (const def of RESEARCH) {
       const card = researchCards.get(def.id);
       if (!card) continue;
       const level = lv(def.id);
       const cap = def.cap();
-      const maxed = level >= cap;
-      const price = maxed ? 0 : def.cost(level);
-      const affordable = !maxed && price !== Infinity && state.data >= price;
-
-      card.classList.toggle('maxed', maxed);
-      card.classList.toggle('disabled', !maxed && !affordable);
-      card.querySelector('.card-desc').textContent = def.desc;
-      card.querySelector('.level').textContent = `Lv ${level}/${cap}`;
-
-      const costEl = card.querySelector('.cost');
-      if (maxed) {
-        costEl.textContent = 'MAX';
-        costEl.className = 'cost free';
-      } else if (price === Infinity) {
-        costEl.textContent = '???';
-        costEl.className = 'cost';
-      } else {
-        costEl.textContent = `${fmt(price)} Data`;
-        costEl.className = 'cost';
-      }
+      const price = level >= cap ? 0 : def.cost(level);
+      const affordable = level < cap && price !== Infinity && state.data >= price;
+      card.classList.toggle('maxed', level >= cap);
+      card.classList.toggle('disabled', level < cap && !affordable);
+      setCardText(card, def, level, cap, price, 'Data');
     }
 
     for (const def of UPGRADES) {
       const card = cards.get(def.id);
+      if (!card) continue;
       const level = lv(def.id);
       const cap = def.cap();
       const maxed = level >= cap;
       const price = maxed ? 0 : def.cost(level);
       const affordable = !maxed && state.credits >= price;
-
+      card.hidden = !!def.gate && !def.gate();
       card.classList.toggle('maxed', maxed);
       card.classList.toggle('disabled', !maxed && !affordable);
-
-      card.querySelector('.card-desc').textContent =
-        typeof def.desc === 'function' ? def.desc() : def.desc;
-      card.querySelector('.level').textContent = `Lv ${level}/${cap}`;
-
-      const costEl = card.querySelector('.cost');
-      if (maxed) {
-        costEl.textContent = 'MAX';
-        costEl.className = 'cost free';
-      } else {
-        costEl.textContent = price === 0 ? 'Free!' : `${fmt(price)} Cr`;
-        costEl.className = price === 0 ? 'cost free' : 'cost';
-      }
+      setCardText(card, def, level, cap, price, 'Cr');
     }
   }
 
@@ -422,6 +456,7 @@
       const data = JSON.parse(raw);
       state.credits = Number(data.credits) || 0;
       state.data = Number(data.data) || 0;
+      state.energy = Number(data.energy) || 0;
       state.lv = data.lv && typeof data.lv === 'object' ? data.lv : {};
       state.growthTime = Number(data.growthTime) || 0;
       state.researchTime = Number(data.researchTime) || 0;
@@ -462,13 +497,14 @@
   }
 
   // ---------- Init ----------
-  els.save.addEventListener('click', save);
+  els.save.addEventListener('click', () => save());
   els.researchBtn.addEventListener('click', doResearch);
   els.cubeBtn.addEventListener('click', clickCube);
   els.reset.addEventListener('click', () => {
     if (!confirm('Reset your save? This cannot be undone.')) return;
     state.credits = 0;
     state.data = 0;
+    state.energy = 0;
     state.lv = {};
     state.growthTime = 0;
     state.researchTime = 0;

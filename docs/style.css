@@ -215,6 +215,54 @@ button.danger { background: var(--danger); }
 
 #status { margin-left: auto; font-size: 0.85rem; }
 
+.dev-toggle { background: #3a3d6b; font-weight: 700; letter-spacing: 0.05em; }
+.dev-toggle.active { background: var(--orange); color: #1a1c33; }
+
+.dev-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 60px;
+  width: 340px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--orange);
+  border-radius: 12px;
+  padding: 12px 14px;
+  z-index: 20;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  font-size: 0.85rem;
+}
+
+.dev-section { margin-bottom: 14px; }
+.dev-section h3 {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--orange);
+}
+
+.dev-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.dev-row input {
+  width: 150px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dev-section button { margin: 0 6px 6px 0; padding: 5px 9px; font-size: 0.8rem; }
+
 @media (max-width: 600px) {
   .topbar { padding: 14px 16px; }
   main { padding: 16px; }

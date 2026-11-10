@@ -215,8 +215,11 @@
     return 0.125 + (state.clicks / 100) ** 0.125;
   }
 
-  // Starters milestone (25 clicks) gives a 5% crit chance. Crit multiplier ×5 is assumed.
-  const CRIT_MULT = 5;
+  // Tunable values (editable in dev mode).
+  // Crit multiplier ×5 is assumed, the wiki does not give one.
+  const CONFIG = { critMult: 5 };
+
+  // Starters milestone (25 clicks) gives a 5% crit chance.
   function cubeCritChance() {
     return state.clicks >= 25 ? 0.05 : 0;
   }
@@ -285,7 +288,7 @@
   function clickCube() {
     if (!lv('CB')) return;
     let gain = cubeClickGain();
-    if (Math.random() < cubeCritChance()) gain *= CRIT_MULT;
+    if (Math.random() < cubeCritChance()) gain *= CONFIG.critMult;
     state.clicks += gain;
     render();
   }
@@ -318,6 +321,8 @@
     status: document.getElementById('status'),
     save: document.getElementById('save-btn'),
     reset: document.getElementById('reset-btn'),
+    devBtn: document.getElementById('dev-btn'),
+    devPanel: document.getElementById('dev-panel'),
   };
 
   const cards = new Map();
@@ -407,7 +412,7 @@
     els.clickGain.textContent = `+${fmt(cubeClickGain())}/click`;
     els.cubeBoosts.textContent =
       `Credits ×${cubeCreditsBoost().toFixed(2)} · Data ×${cubeDataBoost().toFixed(2)} · ` +
-      `Crit ${(cubeCritChance() * 100).toFixed(0)}% (×${CRIT_MULT}) · Milestone: Starters (25 clicks)`;
+      `Crit ${(cubeCritChance() * 100).toFixed(0)}% (×${CONFIG.critMult}) · Milestone: Starters (25 clicks)`;
 
     els.corePanel.hidden = !lv('CR');
     els.energy.textContent = fmt(state.energy);
@@ -493,11 +498,114 @@
     }
 
     render();
+    if (devOn) refreshDevPanel();
     requestAnimationFrame(tick);
+  }
+
+  // ---------- Developer mode ----------
+  // Toggle with the DEV button. Lets you edit any value directly.
+  // Enabled flag is stored with the save so it survives reloads.
+  let devOn = localStorage.getItem('upgradex-dev') === '1';
+
+  function devField(label, get, set, step = 'any') {
+    const row = document.createElement('label');
+    row.className = 'dev-row';
+    const name = document.createElement('span');
+    name.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.step = step;
+    input.value = String(get());
+    input._get = get;
+    input.addEventListener('change', () => {
+      const v = Number(input.value);
+      if (!Number.isFinite(v)) { input.value = String(get()); return; }
+      set(v);
+      save(true);
+      render();
+    });
+    row.append(name, input);
+    return row;
+  }
+
+  function devSection(title, rows) {
+    const box = document.createElement('div');
+    box.className = 'dev-section';
+    const h = document.createElement('h3');
+    h.textContent = title;
+    box.appendChild(h);
+    for (const r of rows) box.appendChild(r);
+    return box;
+  }
+
+  function devButton(label, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.addEventListener('click', () => { onClick(); save(true); render(); });
+    return b;
+  }
+
+  function buildDevPanel() {
+    const box = els.devPanel;
+    box.innerHTML = '';
+
+    box.appendChild(devSection('Currencies', [
+      devField('Credits', () => state.credits, (v) => (state.credits = v)),
+      devField('Data', () => state.data, (v) => (state.data = v)),
+      devField('Energy', () => state.energy, (v) => (state.energy = v)),
+      devField('Cube clicks', () => state.clicks, (v) => (state.clicks = v)),
+      devField('Research count', () => state.researches, (v) => (state.researches = v), '1'),
+      devField('Research time (s)', () => state.researchTime, (v) => (state.researchTime = v)),
+      devField('Growth time (s)', () => state.growthTime, (v) => (state.growthTime = v)),
+    ]));
+
+    box.appendChild(devSection('Tunables', [
+      devField('Crit multiplier', () => CONFIG.critMult, (v) => (CONFIG.critMult = v)),
+    ]));
+
+    const lvRows = [];
+    for (const def of [...UPGRADES, ...RESEARCH]) {
+      lvRows.push(devField(`#${def.id} ${def.title}`, () => lv(def.id),
+        (v) => {
+          const n = Math.max(0, Math.floor(v));
+          if (n === 0) delete state.lv[def.id];
+          else state.lv[def.id] = n;
+        }, '1'));
+    }
+    box.appendChild(devSection('Upgrade levels (0 = unbought)', lvRows));
+
+    box.appendChild(devSection('Actions', [
+      devButton('Unlock everything', () => {
+        for (const def of UPGRADES) state.lv[def.id] = def.cap();
+        for (const def of RESEARCH) state.lv[def.id] = def.cap();
+      }),
+      devButton('Max credits +1e12', () => (state.credits += 1e12)),
+      devButton('Max data +1e6', () => (state.data += 1e6)),
+      devButton('Add 100 cube clicks', () => (state.clicks += 100)),
+      devButton('Clear all levels', () => (state.lv = {})),
+    ]));
+  }
+
+  // Update input values from game state, skipping the field being edited.
+  function refreshDevPanel() {
+    for (const input of els.devPanel.querySelectorAll('input')) {
+      if (input === document.activeElement || !input._get) continue;
+      input.value = String(input._get());
+    }
+  }
+
+  function setDevMode(on) {
+    devOn = on;
+    localStorage.setItem('upgradex-dev', on ? '1' : '0');
+    els.devPanel.hidden = !on;
+    els.devBtn.classList.toggle('active', on);
+    if (on) buildDevPanel();
   }
 
   // ---------- Init ----------
   els.save.addEventListener('click', () => save());
+  els.devBtn.addEventListener('click', () => setDevMode(!devOn));
   els.researchBtn.addEventListener('click', doResearch);
   els.cubeBtn.addEventListener('click', clickCube);
   els.reset.addEventListener('click', () => {
@@ -517,6 +625,7 @@
   load();
   buildCards();
   buildResearchCards();
+  setDevMode(devOn);
   render();
   requestAnimationFrame(tick);
 })();

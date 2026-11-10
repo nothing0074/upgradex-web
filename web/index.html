@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Upgradex (Web)</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Upgradex <span class="tag">web</span></h1>
+    <div class="stats">
+      <div class="stat">
+        <span class="label">Credits</span>
+        <span id="credits" class="value">0</span>
+      </div>
+      <div class="stat">
+        <span class="label">Per second</span>
+        <span id="rate" class="value">0</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>Main <span class="muted">· Layer 1</span></h2>
+      <div id="upgrades" class="grid"></div>
+    </section>
+  </main>
+
+  <footer>
+    <button id="save-btn" type="button">Save</button>
+    <button id="reset-btn" type="button" class="danger">Reset save</button>
+    <span id="status" class="muted"></span>
+  </footer>
+
+  <script src="game.js"></script>
+</body>
+</html>

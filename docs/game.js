@@ -43,12 +43,15 @@
       desc: 'Start generating 1/s Credits every second.',
     },
     {
-      id: '2', title: 'Addition', cap: () => 3 + 3 * lv('6'), cost: (l) => 25 * (l + 1), // cost: assumed
+      // Cost from the wiki formula: 3L^2 - 3L + 10 - 2, where L = current level.
+      id: '2', title: 'Addition', cap: () => 3 + 3 * lv('6'), cost: (l) => 3 * l * l - 3 * l + 10 - 2,
       desc: () => `+${1 + lv('7')}/s Credits per level. Additions are applied to the base amount.`,
     },
     {
-      // Wiki cap "3 (+47)" = 50 total; #9 adds +27. Cost formula is not given by the wiki (assumed).
-      id: '3', title: 'Stronger addition', cap: () => 50 + 27 * lv('9'), cost: (l) => 25 * (l + 1),
+      // Wiki cap "3 (+47)" = 50 total; #9 adds +27.
+      // Cost past level 3: 2.083L^2 + 83.94L - 53.43 (L = current level). Levels 0-3 are still assumed: 25*(L+1).
+      id: '3', title: 'Stronger addition', cap: () => 50 + 27 * lv('9'),
+      cost: (l) => (l >= 3 ? Math.ceil(2.083 * l * l + 83.94 * l - 53.43) : 25 * (l + 1)),
       desc: '+3/s Credits per level.',
     },
     {

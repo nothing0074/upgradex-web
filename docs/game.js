@@ -15,10 +15,6 @@
 
   const lv = (id) => state.lv[id] || 0;
 
-  // Synergism (#5) counts every bought upgrade that has a Credits-* tag (from TAGS).
-  const CREDITS_IDS = Object.keys(TAGS).filter((id) => TAGS[id].some((t) => t.startsWith('Credits-')));
-  const countSynergy = () => CREDITS_IDS.filter((id) => lv(id) > 0).length;
-
   // Tags per upgrade, copied from the Main baseplate table on the wiki.
   // First tag = colour group, second = currency group (Credits-*).
   const TAGS = {
@@ -34,6 +30,10 @@
     '11': ['Orange', 'Credits-Orange'],
     '12': ['Purple', 'Credits-Purple'],
   };
+
+  // Synergism (#5) counts every bought upgrade that has a Credits-* tag (from TAGS).
+  const CREDITS_IDS = Object.keys(TAGS).filter((id) => TAGS[id].some((t) => t.startsWith('Credits-')));
+  const countSynergy = () => CREDITS_IDS.filter((id) => lv(id) > 0).length;
 
   // ---------- Upgrade definitions (Main, layer 1) ----------
   // cap(): max level. cost(level): credits needed to buy the next level.

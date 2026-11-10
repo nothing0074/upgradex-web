@@ -18,6 +18,10 @@
         <span class="label">Per second</span>
         <span id="rate" class="value">0</span>
       </div>
+      <div class="stat" id="data-panel" hidden>
+        <span class="label">Data</span>
+        <span id="data" class="value">0</span>
+      </div>
     </div>
   </header>
 
@@ -25,6 +29,24 @@
     <section>
       <h2>Main <span class="muted">· Layer 1</span></h2>
       <div id="upgrades" class="grid"></div>
+    </section>
+
+    <section id="research-panel" hidden>
+      <h2>Research <span class="muted">· Layer 1</span>
+        <button id="research-btn" type="button">RESEARCH</button>
+      </h2>
+      <div id="research" class="grid"></div>
+    </section>
+
+    <section id="cube-panel" hidden>
+      <h2>Cube</h2>
+      <div class="cube-row">
+        <button id="cube-btn" type="button" class="cube">Click the Cube</button>
+        <div class="cube-stats">
+          <div>Clicks: <strong id="clicks">0</strong></div>
+          <div class="muted" id="click-gain">+1/click</div>
+        </div>
+      </div>
     </section>
   </main>
 

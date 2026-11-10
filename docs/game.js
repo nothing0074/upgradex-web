@@ -15,11 +15,25 @@
 
   const lv = (id) => state.lv[id] || 0;
 
-  // Count of bought upgrades that count for Synergism (#5).
-  // Assumption: every other implemented upgrade with a Credits tag counts.
-  // Approximation: the wiki's "Credits-True" tag is not listed per upgrade in the export.
-  const SYNERGY_IDS = ['2', '3', '4', '6', '7', '9', '10', '11', '12'];
-  const countSynergy = () => SYNERGY_IDS.filter((id) => lv(id) > 0).length;
+  // Synergism (#5) counts every bought upgrade that has a Credits-* tag (from TAGS).
+  const CREDITS_IDS = Object.keys(TAGS).filter((id) => TAGS[id].some((t) => t.startsWith('Credits-')));
+  const countSynergy = () => CREDITS_IDS.filter((id) => lv(id) > 0).length;
+
+  // Tags per upgrade, copied from the Main baseplate table on the wiki.
+  // First tag = colour group, second = currency group (Credits-*).
+  const TAGS = {
+    '1': ['Blue', 'Credits-Blue'],
+    '2': ['Green', 'Credits-Green'],
+    '3': ['Green', 'Credits-Green'],
+    '4': ['Orange', 'Credits-Orange'],
+    '5': ['Orange', 'Credits-Orange'],
+    '6': ['Red', 'Credits-Red'],
+    '7': ['Red', 'Credits-Red'],
+    '9': ['Red', 'Credits-Red'],
+    '10': ['Green', 'Credits-Green'],
+    '11': ['Orange', 'Credits-Orange'],
+    '12': ['Purple', 'Credits-Purple'],
+  };
 
   // ---------- Upgrade definitions (Main, layer 1) ----------
   // cap(): max level. cost(level): credits needed to buy the next level.
@@ -43,7 +57,7 @@
     },
     {
       id: '5', title: 'Synergism', cap: () => 1, cost: () => 250,
-      desc: '×1.1 Credits gain for every Credits-True upgrade.',
+      desc: '×1.1 Credits gain for every upgrade with a Credits tag.',
     },
     {
       id: '6', title: 'Extender', cap: () => 4, cost: (l) => 125 * 2 ** l,
@@ -130,11 +144,19 @@
           <span class="card-title">${def.title}</span>
           <span class="card-index">#${def.id}</span>
         </div>
+        <div class="tags"></div>
         <div class="card-desc"></div>
         <div class="card-foot">
           <span class="level"></span>
           <span class="cost"></span>
         </div>`;
+      const tagBox = card.querySelector('.tags');
+      for (const tag of TAGS[def.id] || []) {
+        const chip = document.createElement('span');
+        chip.className = `tag-chip tag-${tag.split('-')[0].toLowerCase()}`;
+        chip.textContent = tag;
+        tagBox.appendChild(chip);
+      }
       card.addEventListener('click', () => buy(def));
       els.upgrades.appendChild(card);
       cards.set(def.id, card);

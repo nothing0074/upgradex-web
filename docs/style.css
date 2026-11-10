@@ -125,6 +125,24 @@ main h2 { margin: 0 0 16px; font-size: 1.2rem; }
 
 .card-desc { font-size: 0.9rem; color: var(--muted); line-height: 1.4; }
 
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.tag-chip {
+  font-size: 0.7rem;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tag-blue { color: var(--blue); }
+.tag-green { color: var(--green); }
+.tag-orange { color: var(--orange); }
+.tag-red { color: var(--red); }
+.tag-purple { color: var(--purple); }
+.tag-cyan { color: #6ee7e7; }
+.tag-yellow { color: #ffe36e; }
+
 .card-foot {
   display: flex;
   justify-content: space-between;

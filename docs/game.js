@@ -1,12 +1,15 @@
 // Upgradex web version.
-// Mechanics are based on the Upgradex wiki (Main, Research, Cube).
+// Mechanics are based on the Upgradex wiki (Main, Research, Cube, Core).
 // Where the wiki does not give a value, an assumption is noted below.
+// Missing or unfinished wiki items are listed in MISSING.txt.
 
 (() => {
   const SAVE_KEY = 'upgradex-web-v1';
   const SAVE_INTERVAL_MS = 5000;
 
   // ---------- State ----------
+  const DEFAULT_WAVE = () => ({ red: 0, orange: 0, yellow: 0, white: 0 });
+
   const state = {
     credits: 0,
     data: 0,
@@ -16,9 +19,15 @@
     researchTime: 0,  // seconds since the last Research reset
     clicks: 0,        // Cube clicks
     researches: 0,    // number of Research resets
+    wave: DEFAULT_WAVE(),          // Wavelength energy amounts
+    waveUnlocked: { white: true }, // Wavelength unlock flags (white is free)
+    focus: null,      // focused Wavelength id, or null
   };
 
   const lv = (id) => state.lv[id] || 0;
+  const wave = (id) => state.wave[id] || 0;
+  const on = (id, at) => wave(id) >= at;                          // milestone active
+  const oom = (x) => (x < 1 ? 0 : Math.floor(Math.log10(x)) + 1); // orders of magnitude, 1 → 1, 10 → 2
 
   // Tags per upgrade, copied from the wiki tables.
   // First tag = colour group, second = currency or system group.
@@ -62,6 +71,29 @@
   const CREDITS_IDS = Object.keys(TAGS).filter((id) => TAGS[id].some((t) => t.startsWith('Credits-')));
   const countSynergy = () => CREDITS_IDS.filter((id) => lv(id) > 0).length;
 
+  // ---------- Wavelengths (Core) ----------
+  // req: Energy needed to unlock (not spent). Milestones are active when the amount reaches `at`.
+  const WAVES = [
+    { id: 'white', name: 'White', req: 0, milestones: [] },
+    { id: 'red', name: 'Red', req: 10, milestones: [
+      { name: 'Addition R', at: 10, text: '+20/s Credits per order of magnitude of Red' },
+      { name: 'Cap R', at: 1000, text: 'Upgrade #3 cap +20' },
+      { name: 'Buff R', at: 5000, text: 'Upgrade #10 growth +2/s²' },
+      { name: 'Welfare+', at: 25000, text: 'Upgrade #6R threshold ×5000' },
+    ] },
+    { id: 'orange', name: 'Orange', req: 1000, milestones: [
+      { name: 'Credits O', at: 1000, text: '+0.1× Credits per order of magnitude of Orange' },
+      { name: 'Data O', at: 10000, text: '+0.05× Data per order of magnitude of Orange' },
+    ] },
+    { id: 'yellow', name: 'Yellow', req: 100000, milestones: [
+      { name: 'Research Y', at: 10, text: '+1 order of magnitude of effective Credits in Research (from 1B)' },
+      { name: 'Prestige Y', at: 100, text: 'Prestige is not implemented' },
+      { name: 'Addition Y', at: 1000, text: '+0.5× Data per 3 orders of magnitude' },
+      { name: 'Multiplication Y', at: 10000, text: 'Research Y gets +4 orders of magnitude per 3' },
+    ] },
+  ];
+  const waveUnlocked = (id) => !!state.waveUnlocked[id];
+
   // ---------- Upgrade definitions (Main, layer 1) ----------
   // cap(): max level. cost(level): credits needed to buy the next level.
   // gate(): optional, card is hidden until it returns true.
@@ -76,9 +108,9 @@
       desc: () => `+${1 + lv('7')}/s Credits per level.`,
     },
     {
-      // Wiki cap "3 (+47)" = 50 total; #9 adds +27.
+      // Wiki cap "3 (+47)" = 50 total; #9 adds +27; Red Wavelength "Cap R" adds +20.
       // Cost past level 3: 2.083L^2 + 83.94L - 53.43. Levels 0-2 are assumed: 25*(L+1).
-      id: '3', title: 'Stronger addition', cap: () => 50 + 27 * lv('9'),
+      id: '3', title: 'Stronger addition', cap: () => 50 + 27 * lv('9') + (on('red', 1000) ? 20 : 0),
       cost: (l) => (l >= 3 ? Math.ceil(2.083 * l * l + 83.94 * l - 53.43) : 25 * (l + 1)),
       desc: () => `+${3 + 5 * lv('4R')}/s Credits per level.`,
     },
@@ -111,7 +143,7 @@
     },
     {
       id: '10', title: 'Grows overtime', cap: () => 1, cost: () => 25000,
-      desc: '+50/s Credits, growing by +1/s every second. Resets on Research.',
+      desc: () => `+50/s Credits, growing by +${growthRate()}/s every second. Resets on Research.`,
     },
     {
       id: '11', title: 'Exponentiation', cap: () => 10, cost: (l) => 25000 * 2 ** l,
@@ -146,7 +178,7 @@
     { id: '5R', title: 'Cubing it', cap: () => 3, cost: () => 15,
       desc: '+1 Cube click gain per level.' },
     { id: '6R', title: 'Welfare', cap: () => 1, cost: () => 10,
-      desc: '×4 Credits gain while you have less than 1M Credits.' },
+      desc: '×4 Credits gain while you have less than 1M Credits (more with Red Wavelength).' },
     { id: '7R', title: 'Strong memory', cap: () => 1, cost: () => 60,
       desc: "Upgrade #5's multiplier per upgrade is +0.1 higher." },
     { id: '8R', title: 'Devotion', cap: () => 1, cost: () => 50,
@@ -157,8 +189,8 @@
       desc: 'Adds more Blue upgrades (#12 & #13).' },
     { id: '11R', title: 'Glamour', cap: () => 10, cost: (l) => 250 * 2 ** l, impl: false,
       desc: 'Prestige gain on Prestige reset.' },
-    { id: '12R', title: 'Expansion 3!!!', cap: () => 1, cost: () => 500, impl: false,
-      desc: 'Unlocks the Energy upgrades section.' },
+    { id: '12R', title: 'Expansion 3!!!', cap: () => 1, cost: () => 500,
+      desc: 'Unlocks the Core upgrades (Energetic, Sunlit, Infrared).' },
     { id: '13R', title: 'Flashy', cap: () => 10, cost: () => Infinity, impl: false,
       desc: 'Ascension gain on Ascension reset. Cost is missing on the wiki.' },
     { id: '14R', title: 'Recursion', cap: () => 1, cost: () => Infinity, impl: false,
@@ -175,21 +207,43 @@
       desc: 'Unlocks Breakthrough. Cost is missing on the wiki.' },
   ];
 
+  // ---------- Core upgrades (cost in Energy) ----------
+  // Shown after Research #12R. Assumed to persist through Research resets.
+  const CORE_UPGRADES = [
+    { id: 'ENE', title: 'Energetic', cap: () => 3, cost: (l) => 1000 * 5 ** l,
+      gate: () => lv('12R') > 0,
+      desc: () => `Passive Energy gain +${(0.25 * lv('ENE')).toFixed(2)}%/s (of current Energy).` },
+    { id: 'SUN', title: 'Sunlit', cap: () => 4, cost: (l) => 100 * 100 ** l,
+      gate: () => lv('12R') > 0,
+      desc: 'Multiplies White gain by the gap to your highest Wavelength, at a reduced rate.' },
+    { id: 'INF', title: 'Infrared', cap: () => 5, cost: (l) => 1000 * 100 ** l,
+      gate: () => lv('12R') > 0,
+      desc: '+1/s base White gain per level.' },
+  ];
+
   // ---------- Economy ----------
+  // Upgrade #10 grows at 1/s, or 3/s with Red "Buff R".
+  function growthRate() { return 1 + (on('red', 5000) ? 2 : 0); }
+
+  // Upgrade #6R threshold, raised by Red "Welfare+".
+  function welfareThreshold() { return 1e6 * (on('red', 25000) ? 5000 : 1); }
+
   function creditsPerSecond() {
     let base = lv('1') * 1;
     base += lv('2') * (1 + lv('7'));
     base += lv('3') * (3 + 5 * lv('4R'));   // #4R: upgrade #3 gets +5/s per level
-    if (lv('10')) base += 50 + state.growthTime;
+    if (lv('10')) base += 50 + growthRate() * state.growthTime;
     base += lv('1R') * 15;                  // #1R Headstart
+    if (on('red', 10)) base += 20 * oom(wave('red')); // Red "Addition R"
 
     let mult = 1;
     if (lv('4')) mult *= 2;
     if (lv('5')) mult *= (1.1 + 0.1 * lv('7R')) ** countSynergy(); // #7R: +0.1 per upgrade
     mult *= 1.2 ** lv('11');
     if (lv('3R')) mult *= 1 + 0.5 * (lv('3R') + 1); // #3R: first level ×2, +0.5 per level
-    if (lv('6R') && state.credits < 1e6) mult *= 4; // #6R Welfare
+    if (lv('6R') && state.credits < welfareThreshold()) mult *= 4; // #6R Welfare
     if (lv('8R') && state.researchTime > 30) mult *= 2; // #8R Devotion
+    if (on('orange', 1000)) mult *= 1 + 0.1 * oom(wave('orange')); // Orange "Credits O"
     mult *= cubeCreditsBoost();
 
     let gain = base * mult;
@@ -224,19 +278,69 @@
     return state.clicks >= 25 ? 0.05 : 0;
   }
 
+  function cubeClickAction() {
+    if (!lv('CB')) return;
+    let gain = cubeClickGain();
+    if (Math.random() < cubeCritChance()) gain *= CONFIG.critMult;
+    state.clicks += gain;
+    render();
+  }
+
+  // ---------- Core: Wavelengths ----------
+  // Sunlit: White gain × (1 + log10((max+1)/(white+1))^(level × 0.05)).
+  function sunlitMult() {
+    const l = lv('SUN');
+    if (!l) return 1;
+    const max = Math.max(...Object.values(state.wave));
+    const cur = wave('white');
+    if (max <= cur) return 1;
+    return 1 + Math.log10((max + 1) / (cur + 1)) ** (l * 0.05);
+  }
+
+  // Focused Wavelength gains 1/s (assumption, the wiki gives no rate).
+  // White gains (1 + Infrared levels) × Sunlit multiplier.
+  function waveTick(dt) {
+    const f = state.focus;
+    if (!f || !waveUnlocked(f)) return;
+    let rate = 1;
+    if (f === 'white') rate = (1 + lv('INF')) * sunlitMult();
+    state.wave[f] = wave(f) + rate * dt;
+  }
+
+  // Research Y adds orders of magnitude to effective Credits, from 1B.
+  function researchBaseCredits() {
+    let c = state.credits;
+    if (c >= 1e9) {
+      let extra = 0;
+      if (on('yellow', 10)) extra += oom(wave('yellow'));
+      if (on('yellow', 10000)) extra += 4 * Math.floor(oom(wave('yellow')) / 3);
+      c *= 10 ** extra;
+    }
+    return c;
+  }
+
+  // Data multipliers from Wavelengths (Orange "Data O", Yellow "Addition Y").
+  function dataWaveMult() {
+    let m = 1;
+    if (on('orange', 10000)) m *= 1 + 0.05 * oom(wave('orange'));
+    if (on('yellow', 1000)) m *= 1 + 0.5 * Math.floor(oom(wave('yellow')) / 3);
+    return m;
+  }
+
   // ---------- Research ----------
   // Data gained by a Research reset (wiki: (Credits/500)^0.25, needs at least 500 Credits).
   function pendingData() {
     if (state.credits < 500) return 0;
-    let d = (state.credits / 500) ** 0.25;
+    let d = (researchBaseCredits() / 500) ** 0.25;
     if (lv('8R') && state.researchTime > 30) d *= 2; // #8R Devotion
-    return d * cubeDataBoost();
+    return d * cubeDataBoost() * dataWaveMult();
   }
 
-  // Items kept on Research reset: Research items (R / RB), unlock flags, and the Cube.
+  // Items kept on Research reset: Research items (R / RB), unlock flags, Cube, and Core upgrades.
   // Main upgrades are reset (assumption, the wiki does not say which persist).
+  // Wavelength amounts are kept (assumption).
   function keepOnResearch(id) {
-    return /R(B)?$/.test(id) || ['RSC', 'CB', 'CR', 'BTR'].includes(id);
+    return /R(B)?$/.test(id) || ['RSC', 'CB', 'CR', 'BTR', 'ENE', 'SUN', 'INF'].includes(id);
   }
 
   // ---------- Buying ----------
@@ -264,6 +368,33 @@
     save(true);
   }
 
+  function buyCore(def) {
+    if (!lv('12R')) return;
+    const level = lv(def.id);
+    if (level >= def.cap()) return;
+    const price = def.cost(level);
+    if (state.energy < price) return;
+    state.energy -= price;
+    state.lv[def.id] = level + 1;
+    render();
+    save(true);
+  }
+
+  // Unlock (one-time, Energy is only a requirement) or focus a Wavelength.
+  function waveAction(w) {
+    if (!waveUnlocked(w.id)) {
+      if (state.energy < w.req) {
+        flash(`Needs ${fmt(w.req)} Energy`);
+        return;
+      }
+      state.waveUnlocked[w.id] = true;
+    } else {
+      state.focus = state.focus === w.id ? null : w.id;
+    }
+    render();
+    save(true);
+  }
+
   // Research reset: convert Credits to Data, keep Research upgrades and unlocks.
   function doResearch() {
     if (!lv('RSC')) return;
@@ -283,14 +414,6 @@
     state.researches += 1;
     render();
     save(true);
-  }
-
-  function clickCube() {
-    if (!lv('CB')) return;
-    let gain = cubeClickGain();
-    if (Math.random() < cubeCritChance()) gain *= CONFIG.critMult;
-    state.clicks += gain;
-    render();
   }
 
   // ---------- Formatting ----------
@@ -318,6 +441,9 @@
     cubeBoosts: document.getElementById('cube-boosts'),
     corePanel: document.getElementById('core-panel'),
     energy: document.getElementById('energy'),
+    waves: document.getElementById('wavelengths'),
+    coreUpgrades: document.getElementById('core-upgrades'),
+    coreUpgradesBox: document.getElementById('core-upgrades-box'),
     status: document.getElementById('status'),
     save: document.getElementById('save-btn'),
     reset: document.getElementById('reset-btn'),
@@ -327,6 +453,8 @@
 
   const cards = new Map();
   const researchCards = new Map();
+  const coreCards = new Map();
+  const waveCards = new Map();
 
   function makeCard(def, onClick) {
     const card = document.createElement('div');
@@ -377,6 +505,36 @@
     }
   }
 
+  function buildCoreCards() {
+    els.coreUpgrades.innerHTML = '';
+    for (const def of CORE_UPGRADES) {
+      const card = makeCard(def, buyCore);
+      els.coreUpgrades.appendChild(card);
+      coreCards.set(def.id, card);
+    }
+  }
+
+  function buildWaveCards() {
+    els.waves.innerHTML = '';
+    for (const w of WAVES) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="card-head">
+          <span class="card-title">${w.name} Wavelength</span>
+          <span class="card-index">${w.id}</span>
+        </div>
+        <div class="card-desc"></div>
+        <div class="card-foot">
+          <span class="level"></span>
+          <button type="button" class="wave-btn"></button>
+        </div>`;
+      card.querySelector('.wave-btn').addEventListener('click', () => waveAction(w));
+      els.waves.appendChild(card);
+      waveCards.set(w.id, card);
+    }
+  }
+
   function setCardText(card, def, level, cap, price, currency) {
     card.querySelector('.card-desc').textContent =
       typeof def.desc === 'function' ? def.desc() : def.desc;
@@ -394,6 +552,47 @@
     } else {
       costEl.textContent = `${fmt(price)} ${currency}`;
       costEl.className = 'cost';
+    }
+  }
+
+  // Shared card rendering for Main, Research and Core lists.
+  function renderCardList(defs, map, have, currency) {
+    for (const def of defs) {
+      const card = map.get(def.id);
+      if (!card) continue;
+      const level = lv(def.id);
+      const cap = def.cap();
+      const maxed = level >= cap;
+      const price = maxed ? 0 : def.cost(level);
+      const affordable = !maxed && price !== Infinity && have >= price;
+      card.hidden = !!def.gate && !def.gate();
+      card.classList.toggle('maxed', maxed);
+      card.classList.toggle('disabled', !maxed && !affordable);
+      setCardText(card, def, level, cap, price, currency);
+    }
+  }
+
+  function renderWaves() {
+    for (const w of WAVES) {
+      const card = waveCards.get(w.id);
+      const unlocked = waveUnlocked(w.id);
+      const focused = state.focus === w.id;
+      const lines = w.milestones.map((m) => {
+        const active = on(w.id, m.at);
+        return `<div class="${active ? '' : 'muted'}">${active ? '✓' : '·'} ${m.name} (${fmt(m.at)}): ${m.text}</div>`;
+      });
+      card.querySelector('.card-desc').innerHTML = lines.join('') || 'No milestones.';
+      card.querySelector('.level').textContent =
+        `Amount: ${fmt(wave(w.id))}${focused ? ' · focused' : ''}`;
+      const btn = card.querySelector('.wave-btn');
+      if (!unlocked) {
+        btn.textContent = `Unlock (${fmt(w.req)} Energy)`;
+        btn.disabled = state.energy < w.req;
+      } else {
+        btn.textContent = focused ? 'Unfocus' : 'Focus';
+        btn.disabled = false;
+      }
+      card.classList.toggle('disabled', !unlocked && state.energy < w.req);
     }
   }
 
@@ -416,32 +615,12 @@
 
     els.corePanel.hidden = !lv('CR');
     els.energy.textContent = fmt(state.energy);
+    els.coreUpgradesBox.hidden = !lv('12R');
+    renderWaves();
 
-    for (const def of RESEARCH) {
-      const card = researchCards.get(def.id);
-      if (!card) continue;
-      const level = lv(def.id);
-      const cap = def.cap();
-      const price = level >= cap ? 0 : def.cost(level);
-      const affordable = level < cap && price !== Infinity && state.data >= price;
-      card.classList.toggle('maxed', level >= cap);
-      card.classList.toggle('disabled', level < cap && !affordable);
-      setCardText(card, def, level, cap, price, 'Data');
-    }
-
-    for (const def of UPGRADES) {
-      const card = cards.get(def.id);
-      if (!card) continue;
-      const level = lv(def.id);
-      const cap = def.cap();
-      const maxed = level >= cap;
-      const price = maxed ? 0 : def.cost(level);
-      const affordable = !maxed && state.credits >= price;
-      card.hidden = !!def.gate && !def.gate();
-      card.classList.toggle('maxed', maxed);
-      card.classList.toggle('disabled', !maxed && !affordable);
-      setCardText(card, def, level, cap, price, 'Cr');
-    }
+    renderCardList(RESEARCH, researchCards, state.data, 'Data');
+    renderCardList(UPGRADES, cards, state.credits, 'Cr');
+    renderCardList(CORE_UPGRADES, coreCards, state.energy, 'Energy');
   }
 
   // ---------- Save / load ----------
@@ -467,6 +646,15 @@
       state.researchTime = Number(data.researchTime) || 0;
       state.clicks = Number(data.clicks) || 0;
       state.researches = Number(data.researches) || 0;
+      const w = data.wave && typeof data.wave === 'object' ? data.wave : {};
+      state.wave = {
+        red: Number(w.red) || 0,
+        orange: Number(w.orange) || 0,
+        yellow: Number(w.yellow) || 0,
+        white: Number(w.white) || 0,
+      };
+      state.waveUnlocked = { white: true, ...(data.waveUnlocked || {}) };
+      state.focus = typeof data.focus === 'string' ? data.focus : null;
     } catch (e) {
       console.warn('Could not load save', e);
     }
@@ -490,6 +678,8 @@
     if (lv('10')) state.growthTime += dt;
     if (lv('RSC')) state.researchTime += dt;
     state.credits += creditsPerSecond() * dt;
+    if (lv('ENE')) state.energy *= 1 + 0.0025 * lv('ENE') * dt; // Energetic (assumption: % of current Energy)
+    waveTick(dt);
 
     saveTimer += dt * 1000;
     if (saveTimer >= SAVE_INTERVAL_MS) {
@@ -555,6 +745,10 @@
       devField('Data', () => state.data, (v) => (state.data = v)),
       devField('Energy', () => state.energy, (v) => (state.energy = v)),
       devField('Cube clicks', () => state.clicks, (v) => (state.clicks = v)),
+      devField('Red wavelength', () => wave('red'), (v) => (state.wave.red = Math.max(0, v))),
+      devField('Orange wavelength', () => wave('orange'), (v) => (state.wave.orange = Math.max(0, v))),
+      devField('Yellow wavelength', () => wave('yellow'), (v) => (state.wave.yellow = Math.max(0, v))),
+      devField('White wavelength', () => wave('white'), (v) => (state.wave.white = Math.max(0, v))),
       devField('Research count', () => state.researches, (v) => (state.researches = v), '1'),
       devField('Research time (s)', () => state.researchTime, (v) => (state.researchTime = v)),
       devField('Growth time (s)', () => state.growthTime, (v) => (state.growthTime = v)),
@@ -565,7 +759,7 @@
     ]));
 
     const lvRows = [];
-    for (const def of [...UPGRADES, ...RESEARCH]) {
+    for (const def of [...UPGRADES, ...RESEARCH, ...CORE_UPGRADES]) {
       lvRows.push(devField(`#${def.id} ${def.title}`, () => lv(def.id),
         (v) => {
           const n = Math.max(0, Math.floor(v));
@@ -577,8 +771,11 @@
 
     box.appendChild(devSection('Actions', [
       devButton('Unlock everything', () => {
-        for (const def of UPGRADES) state.lv[def.id] = def.cap();
-        for (const def of RESEARCH) state.lv[def.id] = def.cap();
+        for (const def of [...UPGRADES, ...RESEARCH, ...CORE_UPGRADES]) state.lv[def.id] = def.cap();
+        for (const w of WAVES) state.waveUnlocked[w.id] = true;
+      }),
+      devButton('Unlock wavelengths', () => {
+        for (const w of WAVES) state.waveUnlocked[w.id] = true;
       }),
       devButton('Max credits +1e12', () => (state.credits += 1e12)),
       devButton('Max data +1e6', () => (state.data += 1e6)),
@@ -607,7 +804,7 @@
   els.save.addEventListener('click', () => save());
   els.devBtn.addEventListener('click', () => setDevMode(!devOn));
   els.researchBtn.addEventListener('click', doResearch);
-  els.cubeBtn.addEventListener('click', clickCube);
+  els.cubeBtn.addEventListener('click', cubeClickAction);
   els.reset.addEventListener('click', () => {
     if (!confirm('Reset your save? This cannot be undone.')) return;
     state.credits = 0;
@@ -618,6 +815,9 @@
     state.researchTime = 0;
     state.clicks = 0;
     state.researches = 0;
+    state.wave = DEFAULT_WAVE();
+    state.waveUnlocked = { white: true };
+    state.focus = null;
     save();
     render();
   });
@@ -625,6 +825,8 @@
   load();
   buildCards();
   buildResearchCards();
+  buildCoreCards();
+  buildWaveCards();
   setDevMode(devOn);
   render();
   requestAnimationFrame(tick);

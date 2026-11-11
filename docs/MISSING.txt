@@ -1,0 +1,39 @@
+Upgradex web: items from the wiki that are missing or assumed
+=============================================================
+
+Not implemented (wiki pages are "TO BE MADE" or incomplete)
+- Research Baseplate: full page is "TO BE MADE" (only the Research items are known).
+- Prestige Baseplate: "TO BE MADE". No Prestige currency, reset or upgrades.
+- Bonus Baseplate: "TO BE MADE".
+- Donation Baseplate: "TO BE MADE".
+- Ascension Baseplate: mostly empty. No Ascension reset or currency.
+- Data Baseplate: redirect to Research Baseplate.
+- The Void: no void currency or mechanics (page has only a template).
+- Computer: page only says "play math games". Not implemented.
+- Transformers (Cube): not implemented. Only Starters milestone exists.
+- Cube milestones beyond #1 (Starters): none on the wiki page.
+- Cube Prestige boost (needs #6P): not implemented.
+- Neon Headphones, Dunce Cap, Book, D20, Valentine, Los Cubalitos: not implemented.
+- Wavelength effects that need missing systems: Prestige Y, Research Y (partly), Cap R
+  (only Upgrade #3 cap), Welfare+ (only the threshold), Buff R (only #10 growth).
+- Core: Wavelength gain rate is not on the wiki. The focused Wavelength gains 1/s (assumption).
+- Core upgrades: "Energetic" uses % of current Energy per second (assumption).
+- Research items still marked "not implemented": 9R, 10R, 11R, 13R, 14R, 1RB, 2RB, 3RB, BTR.
+
+Missing costs on the wiki
+- Main upgrades #2, #3 (levels 0-2 assumed), #6, #8, #11: costs taken from formulas where
+  available; #6 is 125*2^L and #11 is 25000*2^L, both assumed.
+- Research #13R, #14R, BTR: cost is missing ("???").
+
+Assumptions (wiki does not say)
+- Crit multiplier for Cube crits is x5 (editable in dev mode).
+- Research reset clears Main upgrades; Research items, unlocks, Cube and Core upgrades are kept.
+- Wavelength amounts are kept after Research.
+- Research reset gives Energy equal to Data gained when #CR is owned.
+- #8 For science reward: +2 Data per level on Research reset.
+- Energy growth (Energetic) is a percentage of current Energy per second.
+- Yellow "Research Y" adds orders of magnitude to Credits used in the Research formula (applied above 1B).
+- Infrared, Sunlit and Energetic costs are assumed (wiki gives only start price and multiplier).
+
+Developer mode
+- Dev panel can set Wavelength amounts, unlock Wavelengths, and edit all upgrade levels.
